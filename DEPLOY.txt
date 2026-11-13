@@ -1,0 +1,50 @@
+Globiva GPMP — Production deploy package
+=========================================
+
+This folder is ready to copy to your Linux server (e.g. /home/obtool/APP_DIR/Globiva_GPMP).
+Do NOT copy node_modules from Windows — Docker builds dependencies on the server.
+
+SETTINGS (edit before go-live)
+------------------------------
+1. docker-compose.yml
+   - AD_URL, AD_BIND_DN, AD_BIND_PASSWORD, AD_LDAPS_URL
+   - SMTP_* (or configure later in Admin → Mail / SMS and Save)
+   - CORS_ORIGIN → your production URL (e.g. http://your-server:3000)
+   - JWT_SECRET, LICENSE_SIGNING_SECRET, DB passwords
+
+2. backend/.env.example — reference for non-Docker installs
+
+3. After first start: Admin portal → Mail / SMS, LDAP, Theme — saved in MySQL (app_settings)
+
+LINUX DEPLOY
+------------
+  cd /path/to/Globiva_GPMP
+  docker compose up -d --build
+
+Open: http://<server-ip>:3000
+API:  http://<server-ip>:3001/api/health
+
+WINSCP / COPY TIPS
+------------------
+Upload this entire Globiva_GPMP folder.
+Excluded from package: node_modules, dist, build (avoids copy errors on .bin symlinks).
+
+Admin login: see SUPERADMIN_USERNAME / SUPERADMIN_PASSWORD in docker-compose.yml
+
+DATA PERSISTENCE (enrolled users + mail settings)
+-------------------------------------------------
+Stored in Docker volume mysql_data (MySQL tables):
+  - user_security_answers  = enrolled users / security Q&A
+  - app_settings           = mail, SMS, LDAP, theme (saved in Admin UI)
+
+NEVER run on production (deletes all data):
+  docker compose down -v
+
+Before every deploy or server change:
+  chmod +x scripts/backup-mysql.sh
+  ./scripts/backup-mysql.sh ./backups
+
+Restore after new server or accidental wipe:
+  ./scripts/restore-mysql.sh ./backups/gpmp-mysql-XXXXXXXX.sql
+
+Copy backup FROM old/dev machine TO prod, then restore on prod.

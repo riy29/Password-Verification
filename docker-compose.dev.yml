@@ -1,0 +1,113 @@
+version: '3.8'
+
+# Development compose file with hot reload
+services:
+  # SQL Server Database
+  mssql:
+    image: mcr.microsoft.com/mssql/server:2019-latest
+    container_name: ad-password-manager-db-dev
+    environment:
+      ACCEPT_EULA: Y
+      MSSQL_SA_PASSWORD: P@ssw0rd123!
+      MSSQL_TCP_PORT: 1433
+    ports:
+      - "1433:1433"
+    volumes:
+      - mssql_data_dev:/var/opt/mssql
+      - ./backend/database.sql:/docker-entrypoint-initdb.d/database.sql
+    networks:
+      - ad-network-dev
+    healthcheck:
+      test: ["CMD", "/opt/mssql-tools/bin/sqlcmd", "-S", "localhost", "-U", "sa", "-P", "P@ssw0rd123!", "-Q", "SELECT 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # Backend API - Development Mode with Hot Reload
+  backend-dev:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.dev
+    container_name: ad-password-manager-api-dev
+    environment:
+      PORT: 3001
+      NODE_ENV: development
+      
+      # Database
+      DB_HOST: mssql
+      DB_PORT: 1433
+      DB_NAME: ad_password_manager
+      DB_USER: sa
+      DB_PASSWORD: P@ssw0rd123!
+      
+      # Active Directory (configure with your AD details)
+      AD_URL: ldap://your-ad-server.com
+      AD_BASE_DN: dc=company,dc=com
+      AD_ADMIN_USER: admin@company.com
+      AD_ADMIN_PASSWORD: your_ad_password
+      
+      # JWT
+      JWT_SECRET: dev-secret-key-change-in-production
+      JWT_EXPIRY: 24h
+      
+      # Email SMTP
+      SMTP_HOST: smtp.gmail.com
+      SMTP_PORT: 587
+      SMTP_USER: your-email@gmail.com
+      SMTP_PASSWORD: your-app-password
+      SMTP_FROM: noreply@company.com
+      
+      # SMS Twilio
+      TWILIO_ACCOUNT_SID: your_twilio_account_sid
+      TWILIO_AUTH_TOKEN: your_twilio_auth_token
+      TWILIO_PHONE_NUMBER: +1234567890
+      
+      # OTP
+      OTP_VALIDITY: 300
+      OTP_EXPIRY: 5
+      
+      # CORS
+      CORS_ORIGIN: http://localhost:3000
+    ports:
+      - "3001:3001"
+    depends_on:
+      mssql:
+        condition: service_healthy
+    networks:
+      - ad-network-dev
+    restart: unless-stopped
+    volumes:
+      - ./backend/src:/app/src
+      - /app/node_modules
+
+  # Frontend UI - Development Mode with Hot Reload
+  frontend-dev:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    container_name: ad-password-manager-ui-dev
+    environment:
+      REACT_APP_API_URL: http://localhost:3001/api
+      REACT_APP_ENV: development
+      WATCHPACK_POLLING: 1000
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend-dev
+    networks:
+      - ad-network-dev
+    restart: unless-stopped
+    volumes:
+      - ./frontend/src:/app/src
+      - ./frontend/public:/app/public
+      - /app/node_modules
+    stdin_open: true
+
+networks:
+  ad-network-dev:
+    driver: bridge
+
+volumes:
+  mssql_data_dev:
+    driver: local
